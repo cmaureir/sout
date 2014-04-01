@@ -1,0 +1,141 @@
+#!/usr/bin/env python2
+# Author: Cristian Maureira
+# Date: 30.03.2013
+
+# Intel driver - UMS
+#
+#  VGA - Analog VGA output
+#  LVDS - Laptop panel
+#  DP1 - DisplayPort output
+#  TV - Integrated TV output
+#  TMDS-1 - First DVI SDVO output
+#  TMDS-2 - Second DVI SDVO output
+drivers = ['VGA', 'LVDS', 'DP1', 'TV', 'TMDS1', 'TMDS-2']
+
+# Intel driver - KMS
+#
+#  LVDS1 - Laptop panel
+#  VGA1 - Analog VGA output
+#  DVI1 - Digital video output
+drivers += ['VGA1', 'LVDS1', 'DVI1']
+
+# Radeon driver
+#
+#  VGA-0 - Analog VGA output
+#  LVDS - Laptop panel
+#  S-video - Integrated TV output
+#  DVI-0 - DVI output
+drivers += ['VGA-0', 'LVDS', 'S-video', 'DVI-0']
+
+drvs = set(drivers)
+
+import sys
+import argparse
+from subprocess import Popen, PIPE, call
+
+def parse_command_line_options():
+    desc = "Sout: Screen Out, a xrandr wrapper"
+    parser = argparse.ArgumentParser(description=desc)
+    group  = parser.add_mutually_exclusive_group(required=True)
+
+    group.add_argument("-l", "--left",
+                       help="External screen on the left",
+                       dest="left",
+                       action="store_true")
+
+    group.add_argument("-r", "--right",
+                        help="External screen on the right",
+                        dest="right",
+                        action="store_true")
+
+    group.add_argument("-c", "--copy",
+                        help="External screen as the main one",
+                        dest="copy",
+                        action="store_true")
+
+    group.add_argument("-o", "--off",
+                        help="Disable external screen",
+                        dest="off",
+                        action="store_true")
+
+    args = parser.parse_args()
+
+    op = dict()
+    op['right'] = args.right
+    op['left']  = args.left
+    op['copy']  = args.copy
+    op['off']   = args.off
+
+    return op
+
+def get_screens_and_resolution():
+    global drvs
+
+    # Screens list
+    screens = []
+
+    # Executing xrandr command
+    p0 = Popen(["xrandr"],stdout = PIPE)
+    out, err = p0.communicate()
+
+    dev = False
+    dev_name = ''
+    for line in out.split("\n"):
+        if len(line) > 0:
+            element = line.split()[0]
+        else:
+            continue
+
+        if dev:
+            resolution = line.split()[0]
+            screens.append((dev_name,resolution))
+            dev = False
+
+        if element in drvs and "disconnected" not in line:
+            dev = True
+            dev_name = element
+    return screens
+
+def get_cmd(screens, op):
+
+    print screens
+    if len(screens) > 1:
+        # Main screen
+        main_src = screens[0][0]
+        main_rls = screens[0][1]
+
+        # External screen
+        external_src = screens[1][0]
+        external_rls = screens[1][1]
+
+        # Building the command line
+        cmd  = ["xrandr","--output"]
+        cmd.append(external_src)
+
+        if op["off"]:
+            cmd.append("--off")
+        else:
+            cmd.append("--mode")
+            cmd.append(external_rls)
+            if op["left"]:
+                cmd.append("--left-of")
+                cmd.append(main_src)
+            elif op["right"]:
+                cmd.append("--right-of")
+                cmd.append(main_src)
+            elif op["copy"]:
+                pass
+            else:
+                print "[Error] No valid option"
+                sys.exit(1)
+    else:
+        print "[Error] No external device were found"
+        sys.exit(1)
+
+    return cmd
+
+if __name__ == "__main__":
+    op = parse_command_line_options()
+    scr = get_screens_and_resolution()
+    cmd = get_cmd(scr,op)
+    call(cmd)
