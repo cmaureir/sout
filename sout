@@ -120,9 +120,11 @@ def get_cmd(screens, op):
             if op["left"]:
                 cmd.append("--left-of")
                 cmd.append(main_src)
+                cmd.append("--primary")
             elif op["right"]:
                 cmd.append("--right-of")
                 cmd.append(main_src)
+                cmd.append("--primary")
             elif op["copy"]:
                 pass
             else:
